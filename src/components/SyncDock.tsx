@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useJourneyStore } from '../store/journeyStore'
 import { isSyncConfigured } from '../lib/sync'
+import { isValidSyncCode, normalizeSyncCode } from '../lib/schema'
 
 export function SyncDock() {
   const syncId = useJourneyStore((s) => s.syncId)
@@ -30,8 +31,15 @@ export function SyncDock() {
         void syncNow()
       }
     }
+    const onFocus = () => {
+      if (isSyncConfigured()) void syncNow()
+    }
     document.addEventListener('visibilitychange', onVis)
-    return () => document.removeEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [syncNow])
 
   const statusLabel =
@@ -49,7 +57,17 @@ export function SyncDock() {
 
   async function copyCode() {
     const id = ensureSyncId()
-    await navigator.clipboard.writeText(id)
+    try {
+      await navigator.clipboard.writeText(id)
+    } catch {
+      // Fallback for older mobile browsers
+      const ta = document.createElement('textarea')
+      ta.value = id
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 1600)
   }
@@ -58,10 +76,17 @@ export function SyncDock() {
     e.preventDefault()
     setBusy(true)
     setMsg(null)
+    const normalized = normalizeSyncCode(linkInput)
+    if (!isValidSyncCode(normalized)) {
+      setMsg('Code must look like RTD-XXXX-XXXX-XXXX')
+      setBusy(false)
+      return
+    }
     try {
-      await linkSyncCode(linkInput)
+      await linkSyncCode(normalized)
       setMsg('Devices linked. Progress will stay in sync.')
       setLinkInput('')
+      await syncNow()
     } catch (err) {
       setMsg(err instanceof Error ? err.message : 'Could not link')
     } finally {
@@ -84,18 +109,14 @@ export function SyncDock() {
         <div className="sync-panel">
           <h3>Cross-device sync</h3>
           <p className="muted">
-            Same sync code on phone and laptop = same journey. App updates on
-            refresh never wipe your progress — catalog/code updates separately
-            from your status.
+            Use the <strong>same</strong> code on phone and laptop. Copy from
+            one device, paste + Link on the other.
           </p>
 
           {!isSyncConfigured() && (
             <p className="warn-box">
-              Hosting is ready after env keys are set. Until then, progress
-              still saves on this browser. Add{' '}
-              <code>VITE_SUPABASE_URL</code> +{' '}
-              <code>VITE_SUPABASE_ANON_KEY</code> (see README) to enable phone ↔
-              laptop sync worldwide.
+              This build has no cloud keys. Redeploy with Supabase secrets, then
+              hard-refresh.
             </p>
           )}
 
@@ -115,9 +136,16 @@ export function SyncDock() {
               onChange={(e) => setLinkInput(e.target.value)}
               placeholder="Paste code from other device"
               autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              inputMode="text"
             />
-            <button className="btn primary compact" type="submit" disabled={busy}>
-              Link
+            <button
+              className="btn primary compact"
+              type="submit"
+              disabled={busy || !isSyncConfigured()}
+            >
+              {busy ? 'Linking…' : 'Link'}
             </button>
           </form>
 
@@ -126,17 +154,23 @@ export function SyncDock() {
               type="button"
               className="btn ghost compact"
               onClick={() => void syncNow()}
-              disabled={!isSyncConfigured()}
+              disabled={!isSyncConfigured() || busy}
             >
               Sync now
             </button>
           </div>
 
           {lastSyncedAt && (
-            <p className="muted tiny">Last sync: {new Date(lastSyncedAt).toLocaleString()}</p>
+            <p className="muted tiny">
+              Last sync: {new Date(lastSyncedAt).toLocaleString()}
+            </p>
           )}
           {syncError && <p className="error-text">{syncError}</p>}
-          {msg && <p className="ok-text">{msg}</p>}
+          {msg && (
+            <p className={msg.toLowerCase().includes('linked') ? 'ok-text' : 'error-text'}>
+              {msg}
+            </p>
+          )}
         </div>
       )}
     </div>

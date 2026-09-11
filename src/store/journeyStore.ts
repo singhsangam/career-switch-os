@@ -7,6 +7,7 @@ import {
   defaultModuleStatuses,
   defaultProgress,
   generateSyncCode,
+  isValidSyncCode,
   mergeProgressWithCatalog,
   migratePersisted,
   normalizeSyncCode,
@@ -17,7 +18,7 @@ import {
 } from '../lib/schema'
 import {
   isSyncConfigured,
-  pickNewer,
+  mergeJourneys,
   pullJourney,
   pushJourney,
   type SyncStatus,
@@ -109,14 +110,17 @@ export const useJourneyStore = create<Store>()(
 
       getPersistedSnapshot: () => {
         const s = get()
-        return toPersisted({
-          dayMode: s.dayMode,
-          progress: s.progress,
-          scheduleAnchor: s.scheduleAnchor,
-          completedDays: s.completedDays,
-          rabbitHoles: s.rabbitHoles,
-          moduleStatuses: s.moduleStatuses,
-        })
+        return toPersisted(
+          {
+            dayMode: s.dayMode,
+            progress: s.progress,
+            scheduleAnchor: s.scheduleAnchor,
+            completedDays: s.completedDays,
+            rabbitHoles: s.rabbitHoles,
+            moduleStatuses: s.moduleStatuses,
+          },
+          s.updatedAt,
+        )
       },
 
       applyPersisted: (p) => {
@@ -278,7 +282,7 @@ export const useJourneyStore = create<Store>()(
 
       linkSyncCode: async (code) => {
         const id = normalizeSyncCode(code)
-        if (!id.startsWith('RTD-') || id.length < 14) {
+        if (!isValidSyncCode(id)) {
           throw new Error('Use a code like RTD-XXXX-XXXX-XXXX')
         }
         writeStoredSyncId(id)
@@ -286,19 +290,20 @@ export const useJourneyStore = create<Store>()(
 
         if (!isSyncConfigured()) {
           set({ syncStatus: 'unconfigured' })
-          return
+          throw new Error('Cloud sync is not configured on this build.')
         }
 
         try {
           const remote = await pullJourney(id)
           const local = get().getPersistedSnapshot()
-          if (remote) {
-            const winner = pickNewer(local, remote)
-            get().applyPersisted(winner)
-            await pushJourney(id, get().getPersistedSnapshot())
-          } else {
-            await pushJourney(id, local)
+          const merged = mergeJourneys(local, remote)
+          // Linking is a real sync event — bump stamp so cloud accepts write
+          const stamped = {
+            ...merged,
+            updatedAt: new Date().toISOString(),
           }
+          get().applyPersisted(stamped)
+          await pushJourney(id, get().getPersistedSnapshot())
           set({
             syncStatus: 'synced',
             lastSyncedAt: new Date().toISOString(),
@@ -323,10 +328,9 @@ export const useJourneyStore = create<Store>()(
         try {
           const remote = await pullJourney(id)
           const local = get().getPersistedSnapshot()
-          const winner = pickNewer(local, remote)
-          if (winner !== local) {
-            get().applyPersisted(winner)
-          }
+          const merged = mergeJourneys(local, remote)
+          get().applyPersisted(merged)
+          // Only push if we have something worth storing / changed vs remote substance
           const snapshot = get().getPersistedSnapshot()
           await pushJourney(id, snapshot)
           set({

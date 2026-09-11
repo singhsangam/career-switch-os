@@ -191,14 +191,17 @@ export function rebuildSchedule(persisted: PersistedJourney): ScheduleSlot[] {
   return buildSchedule(persisted.scheduleAnchor || JOURNEY_START, done)
 }
 
-export function toPersisted(input: {
-  dayMode: DayMode
-  progress: Record<string, ProblemProgress>
-  scheduleAnchor: string
-  completedDays: string[]
-  rabbitHoles: RabbitHole[]
-  moduleStatuses: Record<string, ModuleMeta['status']>
-}): PersistedJourney {
+export function toPersisted(
+  input: {
+    dayMode: DayMode
+    progress: Record<string, ProblemProgress>
+    scheduleAnchor: string
+    completedDays: string[]
+    rabbitHoles: RabbitHole[]
+    moduleStatuses: Record<string, ModuleMeta['status']>
+  },
+  updatedAt?: string,
+): PersistedJourney {
   return {
     schemaVersion: DATA_SCHEMA_VERSION,
     dayMode: input.dayMode,
@@ -207,7 +210,8 @@ export function toPersisted(input: {
     completedDays: input.completedDays,
     rabbitHoles: input.rabbitHoles,
     moduleStatuses: input.moduleStatuses,
-    updatedAt: new Date().toISOString(),
+    // Never stamp "now" during sync reads — that made local always win.
+    updatedAt: updatedAt ?? new Date().toISOString(),
   }
 }
 
@@ -221,5 +225,13 @@ export function generateSyncCode(): string {
 }
 
 export function normalizeSyncCode(code: string): string {
-  return code.trim().toUpperCase().replace(/\s+/g, '')
+  return code
+    .trim()
+    .toUpperCase()
+    .replace(/[\s_]+/g, '')
+    .replace(/[^A-Z0-9-]/g, '')
+}
+
+export function isValidSyncCode(code: string): boolean {
+  return /^RTD-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(normalizeSyncCode(code))
 }
