@@ -17,6 +17,7 @@ import { MILESTONE_DATE } from './types'
 import { useMemo, useState, useEffect } from 'react'
 import { SyncDock } from './components/SyncDock'
 import { AuthScreen } from './components/AuthScreen'
+import { ProgressRing } from './components/ProgressRing'
 
 type Tab = 'today' | 'journey' | 'week' | 'modules'
 
@@ -41,7 +42,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('today')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [rhTitle, setRhTitle] = useState('')
-  const [skipAuth, setSkipAuth] = useState(false)
+  const [skipAuth, setSkipAuth] = useState(true)
 
   const userId = useJourneyStore((s) => s.userId)
   const initAuth = useJourneyStore((s) => s.initAuth)
@@ -93,6 +94,21 @@ export default function App() {
       ),
   ).length
   const phase1Total = PROBLEMS.filter((p) => p.phase === 1).length
+  const phase2Done = PROBLEMS.filter(
+    (p) =>
+      p.phase === 2 &&
+      ['solved_independent', 'solved_with_hint', 'understood_after_explanation', 'mastered'].includes(
+        progress[p.id]?.status ?? '',
+      ),
+  ).length
+  const phase2Total = PROBLEMS.filter((p) => p.phase === 2).length
+  const doneCount = phase1Done + phase2Done
+  const totalCount = PROBLEMS.length
+  const currentPhase = (chapter?.phase ?? missionProblem?.phase ?? 1) as 1 | 2
+  const phaseLabel =
+    currentPhase === 1
+      ? `Phase 1 · ${phase1Done}/${phase1Total}`
+      : `Phase 2 · ${phase2Done}/${phase2Total}`
 
   const openProblem = selectedId ? getProblem(selectedId) : missionProblem
   const openProgress = openProblem ? progress[openProblem.id] : undefined
@@ -160,15 +176,39 @@ export default function App() {
       {tab === 'today' && !selectedId && (
         <main className="panel today-panel">
           <section className="hero-mission">
-            <div className="hero-meta">
-              <p className="where">Where you are</p>
-              <h2>
-                {chapter?.subtitle ?? 'Foundation'}
-                <span className="muted">
-                  {' '}
-                  · {percent}% weighted · Phase 1 {phase1Done}/{phase1Total}
-                </span>
-              </h2>
+            <div className="progress-overview">
+              <ProgressRing
+                percent={percent}
+                label="weighted"
+                sublabel={`${doneCount}/${totalCount} done`}
+              />
+              <div className="progress-overview-copy">
+                <p className="where">Where you are</p>
+                <h2>{chapter?.subtitle ?? 'Foundation'}</h2>
+                <p className="muted">
+                  {chapter?.title ?? 'Chapter 1'} · {phaseLabel}
+                </p>
+                <div className="progress-stat-row">
+                  <div>
+                    <span className="strip-label">Phase 1</span>
+                    <strong>
+                      {phase1Done}/{phase1Total}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="strip-label">Phase 2</span>
+                    <strong>
+                      {phase2Done}/{phase2Total}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="strip-label">Overall</span>
+                    <strong>
+                      {doneCount}/{totalCount}
+                    </strong>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="mode-row">
