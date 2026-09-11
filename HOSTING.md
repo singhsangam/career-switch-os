@@ -1,43 +1,39 @@
-# Account sync setup
+# Sync login (read this)
 
-**Live:** https://singhsangam.github.io/career-switch-os/
+## Why you never got an OTP in Gmail
 
-## Why Chrome email alone is not enough
+Supabase’s **free built-in email** is demo-only (very low limits, often blocked/spam). OTP/magic-link to Gmail frequently **never arrives**. That is a provider limit, not your phone/Chrome.
 
-Chrome sync ≠ this app. You must create/sign in **inside Road to December** with the same email on both devices.
+## What to use instead (works without any email)
 
-## Recommended login (most reliable)
+### 1. Turn off email confirmation (required once)
 
-**Create account** with email + password on laptop, then **Sign in** with the same on phone.
+Supabase → **Authentication → Providers → Email**
 
-## One-time Supabase checklist
+- Confirm email = **OFF**
+- Save
 
-### 1. SQL (required)
+### 2. On the website
 
-SQL Editor → paste `supabase/schema.sql` → **Run**.
+1. **Create account**
+2. Enter your Gmail address
+3. Choose any password (6+ chars)
+4. Tap **Create account & start sync**
 
-### 2. Turn OFF email confirmation (so password signup works instantly)
+No OTP. No inbox. You’re signed in immediately.
 
-Authentication → Providers → Email → **Confirm email = OFF**
+### 3. On your phone
 
-(Otherwise new accounts need a confirmation email before sign-in works.)
+1. Open the same site
+2. **Sign in**
+3. Same Gmail + same password
 
-### 3. Auth URLs
+Now both devices sync to that account.
 
-Authentication → URL Configuration:
+## Optional: real Gmail one-click later
 
-- Site URL: `https://singhsangam.github.io/career-switch-os/`
-- Redirect URLs:
-  - `https://singhsangam.github.io/career-switch-os/**`
-  - `http://localhost:5173/**`
+Enable **Google** provider in Supabase Auth (needs Google Cloud OAuth client). Until then, password is the reliable path.
 
-### 4. Optional: Google provider
+## Still blocked?
 
-Authentication → Providers → Google → enable with OAuth client ID/secret.
-
-## How to sync phone + laptop
-
-1. Laptop: open site → **Create account** → email + password
-2. Phone: open same site → **Sign in** → same email + password
-3. Top pill should show **Synced**
-4. Change a problem status on one device → wait a few seconds → refresh the other
+Run `supabase/schema.sql` in the SQL Editor if you haven’t (needed for synced journey storage).

@@ -2,26 +2,23 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useJourneyStore } from '../store/journeyStore'
 import { isSyncConfigured } from '../lib/sync'
 
-type Mode = 'signin' | 'signup' | 'otp'
+type Mode = 'signup' | 'signin'
 
 /**
- * Full-page account gate — email+password is the reliable path for phone↔laptop.
+ * Password auth does NOT need an email code.
+ * Supabase free OTP mail often never arrives in Gmail — so we don't rely on it.
  */
 export function AuthScreen({ onSkip }: { onSkip: () => void }) {
   const userId = useJourneyStore((s) => s.userId)
   const initAuth = useJourneyStore((s) => s.initAuth)
   const signInPassword = useJourneyStore((s) => s.signInPassword)
   const signUpPassword = useJourneyStore((s) => s.signUpPassword)
-  const sendOtp = useJourneyStore((s) => s.sendOtp)
-  const verifyOtp = useJourneyStore((s) => s.verifyOtp)
   const signInGoogle = useJourneyStore((s) => s.signInGoogle)
   const syncNow = useJourneyStore((s) => s.syncNow)
 
   const [mode, setMode] = useState<Mode>('signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [otp, setOtp] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -45,41 +42,24 @@ export function AuthScreen({ onSkip }: { onSkip: () => void }) {
     try {
       if (mode === 'signup') {
         await signUpPassword(email, password)
-        setInfo('Account created and signed in. Your journey will sync to this email.')
+        setInfo('Signed in. Use this same email + password on your phone.')
       } else {
         await signInPassword(email, password)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function onSendOtp(e: FormEvent) {
-    e.preventDefault()
-    setBusy(true)
-    setError(null)
-    setInfo(null)
-    try {
-      await sendOtp(email)
-      setOtpSent(true)
-      setInfo('Code sent. Check your email inbox (and spam), then enter the 6–8 digit code here.')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send code')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function onVerifyOtp(e: FormEvent) {
-    e.preventDefault()
-    setBusy(true)
-    setError(null)
-    try {
-      await verifyOtp(email, otp)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid code')
+      const raw = err instanceof Error ? err.message : 'Authentication failed'
+      if (/confirm|confirmation|verify/i.test(raw)) {
+        setError(
+          raw +
+            ' Fix: In Supabase → Authentication → Providers → Email, turn Confirm email OFF, then try Create account again.',
+        )
+      } else if (/invalid login|invalid credentials/i.test(raw)) {
+        setError(
+          'Wrong email/password, or no account yet. Use Create account first (password), then Sign in on the other device.',
+        )
+      } else {
+        setError(raw)
+      }
     } finally {
       setBusy(false)
     }
@@ -91,15 +71,21 @@ export function AuthScreen({ onSkip }: { onSkip: () => void }) {
         <p className="eyebrow">Road to December</p>
         <h1>Connect your account</h1>
         <p className="lead">
-          Use the <strong>same email + password</strong> on phone and laptop.
-          That is what keeps progress in sync — not Chrome profiles alone.
+          <strong>Do not wait for an email code.</strong> Supabase free email
+          often never reaches Gmail. Create a password here — sync works without
+          OTP.
         </p>
+
+        <div className="warn-box" style={{ marginBottom: '0.9rem' }}>
+          How sync works: same <strong>email + password</strong> on laptop and
+          phone. No OTP needed. No Chrome profile magic.
+        </div>
 
         {!isSyncConfigured() && (
           <p className="warn-box">Cloud keys missing in this build. Sync cannot work yet.</p>
         )}
 
-        <div className="auth-tabs">
+        <div className="auth-tabs" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <button
             type="button"
             className={mode === 'signup' ? 'active' : ''}
@@ -122,113 +108,62 @@ export function AuthScreen({ onSkip }: { onSkip: () => void }) {
           >
             Sign in
           </button>
-          <button
-            type="button"
-            className={mode === 'otp' ? 'active' : ''}
-            onClick={() => {
-              setMode('otp')
-              setError(null)
-              setInfo(null)
-              setOtpSent(false)
-            }}
-          >
-            Email code
-          </button>
         </div>
 
-        {(mode === 'signup' || mode === 'signin') && (
-          <form className="auth-form" onSubmit={onPassword}>
-            <label>
-              Email
-              <input
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@gmail.com"
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                required
-                minLength={6}
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
-              />
-            </label>
-            <button className="btn primary" type="submit" disabled={busy || !isSyncConfigured()}>
-              {busy
-                ? 'Please wait…'
-                : mode === 'signup'
-                  ? 'Create account & sync'
-                  : 'Sign in & sync'}
-            </button>
-          </form>
-        )}
-
-        {mode === 'otp' && (
-          <div className="auth-form">
-            {!otpSent ? (
-              <form onSubmit={onSendOtp}>
-                <label>
-                  Email
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@gmail.com"
-                  />
-                </label>
-                <button className="btn primary" type="submit" disabled={busy || !isSyncConfigured()}>
-                  {busy ? 'Sending…' : 'Send login code'}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={onVerifyOtp}>
-                <label>
-                  Code from email
-                  <input
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    required
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
-                    placeholder="123456"
-                  />
-                </label>
-                <button className="btn primary" type="submit" disabled={busy}>
-                  {busy ? 'Verifying…' : 'Verify & sync'}
-                </button>
-                <button
-                  type="button"
-                  className="btn ghost"
-                  onClick={() => {
-                    setOtpSent(false)
-                    setOtp('')
-                  }}
-                >
-                  Resend / change email
-                </button>
-              </form>
-            )}
-          </div>
-        )}
+        <form className="auth-form" onSubmit={onPassword}>
+          <label>
+            Gmail / email
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@gmail.com"
+            />
+          </label>
+          <label>
+            Password (you choose — min 6 chars)
+            <input
+              type="password"
+              required
+              minLength={6}
+              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="e.g. road2026!"
+            />
+          </label>
+          <button className="btn primary" type="submit" disabled={busy || !isSyncConfigured()}>
+            {busy
+              ? 'Please wait…'
+              : mode === 'signup'
+                ? 'Create account & start sync'
+                : 'Sign in & sync'}
+          </button>
+        </form>
 
         <button
           type="button"
           className="btn ghost"
           style={{ width: '100%', marginTop: '0.75rem' }}
           disabled={busy || !isSyncConfigured()}
-          onClick={() => void signInGoogle().catch((err) => setError(err.message))}
+          onClick={() =>
+            void signInGoogle().catch((err: Error) =>
+              setError(
+                err.message +
+                  ' (Google provider may be disabled in Supabase. Password login still works.)',
+              ),
+            )
+          }
         >
-          Continue with Google
+          Continue with Google (optional)
         </button>
+
+        <p className="muted tiny" style={{ marginTop: '0.85rem' }}>
+          Email OTP / magic link is disabled in this UI on purpose — those emails
+          usually never arrive on free Supabase → Gmail.
+        </p>
 
         {error && <p className="error-text">{error}</p>}
         {info && <p className="ok-text">{info}</p>}

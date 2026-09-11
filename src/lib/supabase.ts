@@ -63,7 +63,7 @@ export async function signUpWithPassword(email: string, password: string): Promi
   // If email confirmation is required, session may be null until confirmed
   if (!data.session) {
     throw new Error(
-      'Account created. If your project requires email confirmation, open the confirmation email, then Sign in with the same password.',
+      'Account was created but not signed in. In Supabase → Authentication → Providers → Email, turn Confirm email OFF, then use Sign in with the same password (no email code needed).',
     )
   }
   return data.user
