@@ -2,8 +2,8 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
-  // GitHub Pages project site: https://<user>.github.io/career-switch-os/
-  base: '/career-switch-os/',
-})
+  // Local dev at / ; GitHub Pages project site needs the repo base path
+  base: command === 'serve' ? '/' : '/career-switch-os/',
+}))

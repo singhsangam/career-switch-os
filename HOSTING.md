@@ -1,47 +1,59 @@
 # Hosting + cross-device sync
 
-Progress is stored separately from app code. When the site is redeployed or you refresh after a feature update, your solved status / notes / confidence stay intact.
+**Live site:** https://singhsangam.github.io/career-switch-os/
 
-## 1. Create a free Supabase project
+Progress is stored separately from app code. Redeploys and refreshes after feature updates keep your solved status, notes, and confidence.
 
-1. Go to https://supabase.com → New project
-2. Open **SQL Editor** → paste and run `supabase/schema.sql`
-3. Open **Project Settings → API** and copy:
+## How updates stay safe
+
+| Layer | What it is | On refresh / redeploy |
+|---|---|---|
+| App / UI / modules / problem catalog | Code in git | Updates |
+| Your journey status | Browser cache + cloud payload | Preserved |
+| Schema version | `DATA_SCHEMA_VERSION` | Migrates; never wipes progress |
+
+## Enable phone ↔ laptop sync (one-time, ~5–10 min)
+
+### 1. Free Supabase project
+
+1. Open https://supabase.com → **New project**
+2. **SQL Editor** → New query → paste all of `supabase/schema.sql` → **Run**
+3. **Project Settings → API** → copy:
    - Project URL
    - `anon` `public` key
 
-## 2. Local env
+### 2. Add secrets to GitHub (so the hosted site can sync)
 
-```bash
-cp .env.example .env
+In PowerShell from this folder:
+
+```powershell
+gh secret set VITE_SUPABASE_URL
+gh secret set VITE_SUPABASE_ANON_KEY
 ```
 
-Fill in:
+Paste each value when prompted, then:
 
-```
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_ANON_KEY=...
-```
-
-Restart `npm run dev`.
-
-## 3. Link phone + laptop
-
-1. Open the site on your laptop
-2. Tap the sync pill → **Copy** your `RTD-****` code
-3. Open the same hosted URL on phone Chrome
-4. Paste the code → **Link**
-
-Same code = same journey, any country / network.
-
-Treat the sync code like a password.
-
-## 4. Deploy (Vercel)
-
-```bash
-npx vercel
+```powershell
+gh workflow run Deploy
 ```
 
-Add the same two env vars in the Vercel project settings, then redeploy.
+### 3. Local `.env` (optional, for `npm run dev`)
 
-After that, use the Vercel URL on your phone.
+```powershell
+copy .env.example .env
+```
+
+Fill the same two values, restart the dev server.
+
+### 4. Link devices
+
+1. Open the live site on your laptop
+2. Tap the sync pill (top right) → **Copy** `RTD-****`
+3. Open the same URL on phone Chrome
+4. Paste → **Link**
+
+Same code = same journey, any country / network. Treat the code like a password.
+
+## Repo
+
+https://github.com/singhsangam/career-switch-os
