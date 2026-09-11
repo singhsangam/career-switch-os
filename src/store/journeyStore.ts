@@ -147,29 +147,45 @@ export const useJourneyStore = create<Store>()(
       updateProblem: (id, patch) => {
         const prev = get().progress[id] ?? defaultProgress()
         const next: ProblemProgress = { ...prev, ...patch }
+        // Full ISO so same-day downgrades/edits win over older cloud copies
+        next.lastTouchedAt = new Date().toISOString()
+
         const becameDone =
-          patch.status &&
+          patch.status !== undefined &&
           isEffectivelyDone(patch.status) &&
           !isEffectivelyDone(prev.status)
 
+        const leftDone =
+          patch.status !== undefined &&
+          !isEffectivelyDone(patch.status) &&
+          isEffectivelyDone(prev.status)
+
         if (becameDone) {
           next.firstSolvedAt = next.firstSolvedAt ?? todayKey()
-          next.lastTouchedAt = todayKey()
           next.nextRevisionAt = nextRevisionDate(
             next.confidence,
             next.revisionCount,
           )
         }
 
+        if (patch.status === 'not_started') {
+          next.firstSolvedAt = undefined
+          next.nextRevisionAt = undefined
+        }
+
+        // Confidence drop can mark needs_revision only when status wasn't explicitly set
         if (
-          patch.status === 'needs_revision' ||
-          patch.confidence === 1 ||
-          patch.confidence === 2
+          patch.status === undefined &&
+          (patch.confidence === 1 || patch.confidence === 2) &&
+          isEffectivelyDone(next.status) &&
+          next.status !== 'mastered'
         ) {
-          if (isEffectivelyDone(next.status) && next.status !== 'mastered') {
-            next.status = 'needs_revision'
-            next.nextRevisionAt = todayKey()
-          }
+          next.status = 'needs_revision'
+          next.nextRevisionAt = todayKey()
+        }
+
+        if (patch.status === 'needs_revision') {
+          next.nextRevisionAt = todayKey()
         }
 
         set((s) => ({
@@ -177,8 +193,10 @@ export const useJourneyStore = create<Store>()(
           updatedAt: new Date().toISOString(),
         }))
 
-        if (becameDone) {
+        if (becameDone || leftDone) {
           get().recalculateRoute(todayKey())
+        }
+        if (becameDone) {
           get().markTouchedToday()
         }
         scheduleCloudPush(get)
@@ -192,7 +210,7 @@ export const useJourneyStore = create<Store>()(
             [id]: {
               ...prev,
               minutesSpent: prev.minutesSpent + minutes,
-              lastTouchedAt: todayKey(),
+              lastTouchedAt: new Date().toISOString(),
             },
           },
           updatedAt: new Date().toISOString(),

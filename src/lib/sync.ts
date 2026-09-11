@@ -32,43 +32,66 @@ function progressRank(p?: ProblemProgress): number {
   )
 }
 
-function pickBetterProblem(
+function touchedMs(p?: ProblemProgress): number {
+  if (!p?.lastTouchedAt) return 0
+  const n = Date.parse(p.lastTouchedAt)
+  return Number.isNaN(n) ? 0 : n
+}
+
+/** Prefer the most recently edited copy so intentional downgrades stick. */
+export function pickBetterProblem(
   a?: ProblemProgress,
   b?: ProblemProgress,
 ): ProblemProgress {
   if (!a) return b as ProblemProgress
   if (!b) return a
-  const ra = progressRank(a)
-  const rb = progressRank(b)
-  if (rb > ra) {
-    return {
-      ...b,
-      minutesSpent: Math.max(a.minutesSpent ?? 0, b.minutesSpent ?? 0),
-      notes: (b.notes?.length ?? 0) >= (a.notes?.length ?? 0) ? b.notes : a.notes,
-      takeaway:
-        (b.takeaway?.length ?? 0) >= (a.takeaway?.length ?? 0)
-          ? b.takeaway
-          : a.takeaway,
-      revisionDates: Array.from(
-        new Set([...(a.revisionDates ?? []), ...(b.revisionDates ?? [])]),
-      ),
-      firstSolvedAt: a.firstSolvedAt ?? b.firstSolvedAt,
-      nextRevisionAt: a.nextRevisionAt ?? b.nextRevisionAt,
+
+  const ta = touchedMs(a)
+  const tb = touchedMs(b)
+
+  let winner: ProblemProgress
+  let loser: ProblemProgress
+  if (tb > ta) {
+    winner = b
+    loser = a
+  } else if (ta > tb) {
+    winner = a
+    loser = b
+  } else {
+    // Same/missing touch time — fall back to richer progress (cross-device first sync)
+    if (progressRank(b) > progressRank(a)) {
+      winner = b
+      loser = a
+    } else {
+      winner = a
+      loser = b
     }
   }
+
   return {
-    ...a,
+    ...winner,
     minutesSpent: Math.max(a.minutesSpent ?? 0, b.minutesSpent ?? 0),
-    notes: (a.notes?.length ?? 0) >= (b.notes?.length ?? 0) ? a.notes : b.notes,
+    notes:
+      (winner.notes?.length ?? 0) >= (loser.notes?.length ?? 0)
+        ? winner.notes
+        : loser.notes,
     takeaway:
-      (a.takeaway?.length ?? 0) >= (b.takeaway?.length ?? 0)
-        ? a.takeaway
-        : b.takeaway,
+      (winner.takeaway?.length ?? 0) >= (loser.takeaway?.length ?? 0)
+        ? winner.takeaway
+        : loser.takeaway,
     revisionDates: Array.from(
       new Set([...(a.revisionDates ?? []), ...(b.revisionDates ?? [])]),
     ),
-    firstSolvedAt: a.firstSolvedAt ?? b.firstSolvedAt,
-    nextRevisionAt: a.nextRevisionAt ?? b.nextRevisionAt,
+    firstSolvedAt:
+      winner.status === 'not_started'
+        ? undefined
+        : winner.firstSolvedAt ?? loser.firstSolvedAt,
+    nextRevisionAt:
+      winner.status === 'not_started'
+        ? undefined
+        : winner.nextRevisionAt ?? loser.nextRevisionAt,
+    lastTouchedAt:
+      ta >= tb ? a.lastTouchedAt ?? b.lastTouchedAt : b.lastTouchedAt ?? a.lastTouchedAt,
   }
 }
 
@@ -83,8 +106,7 @@ export function journeySubstance(j: PersistedJourney): number {
 }
 
 /**
- * Merge local + remote so devices accumulate progress instead of
- * last-writer-wins wiping the other phone/laptop.
+ * Merge local + remote. Per-problem lastTouchedAt wins so resets/edits are respected.
  */
 export function mergeJourneys(
   local: PersistedJourney,
@@ -126,7 +148,6 @@ export function mergeJourneys(
       ...remote.moduleStatuses,
       ...local.moduleStatuses,
     },
-    // Keep the max known stamp; caller bumps only on real user edits.
     updatedAt:
       !Number.isNaN(remoteTs) && remoteTs > (Number.isNaN(localTs) ? 0 : localTs)
         ? remote.updatedAt

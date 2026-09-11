@@ -14,9 +14,14 @@ const env = Object.fromEntries(
 )
 
 const sb = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)
-const id = 'RTD-E2E1-E2E2-E2E3'
+const id = 'RTD-E2E2-DOWN-GRADE'
 
-const laptop = {
+function assert(cond: unknown, msg: string) {
+  if (!cond) throw new Error(msg)
+}
+
+// Step A: cloud has solved
+const solved = {
   schemaVersion: 1 as const,
   dayMode: 'normal' as const,
   progress: {
@@ -24,8 +29,8 @@ const laptop = {
       ...defaultProgress(),
       status: 'solved_independent' as const,
       confidence: 4 as const,
-      takeaway: 'hash',
       minutesSpent: 20,
+      lastTouchedAt: '2026-09-11T12:00:00.000Z',
     },
   },
   scheduleAnchor: '2026-09-11',
@@ -35,55 +40,67 @@ const laptop = {
   updatedAt: '2026-09-11T12:00:00.000Z',
 }
 
-const phone = {
-  schemaVersion: 1 as const,
-  dayMode: 'normal' as const,
-  progress: {
-    'nc-2': {
-      ...defaultProgress(),
-      status: 'attempting' as const,
-      confidence: 2 as const,
-      minutesSpent: 5,
-    },
-  },
-  scheduleAnchor: '2026-09-11',
-  completedDays: [],
-  rabbitHoles: [],
-  moduleStatuses: { dsa: 'active' as const },
-  updatedAt: '2026-09-11T18:00:00.000Z',
-}
-
-const up = await sb.rpc('upsert_journey', {
+let res = await sb.rpc('upsert_journey', {
   p_id: id,
   p_schema: 1,
-  p_payload: laptop,
-  p_updated: laptop.updatedAt,
+  p_payload: solved,
+  p_updated: solved.updatedAt,
 })
-if (up.error) throw up.error
+if (res.error) throw res.error
+
+// Step B: user resets to not_started (newer touch)
+const resetLocal = {
+  ...solved,
+  updatedAt: '2026-09-11T18:00:05.000Z',
+  progress: {
+    'nc-1': {
+      ...defaultProgress(),
+      status: 'not_started' as const,
+      confidence: 1 as const,
+      lastTouchedAt: '2026-09-11T18:00:05.000Z',
+    },
+  },
+}
 
 const pulled = await sb.rpc('fetch_journey', { p_id: id })
 if (pulled.error) throw pulled.error
 const row = Array.isArray(pulled.data) ? pulled.data[0] : pulled.data
-const merged = mergeJourneys(phone, row.payload)
-const stamped = { ...merged, updatedAt: new Date().toISOString() }
+const merged = mergeJourneys(resetLocal, row.payload)
+assert(merged.progress['nc-1'].status === 'not_started', 'merge must keep reset')
 
-const up2 = await sb.rpc('upsert_journey', {
+const stamped = { ...merged, updatedAt: new Date().toISOString() }
+res = await sb.rpc('upsert_journey', {
   p_id: id,
   p_schema: 1,
   p_payload: stamped,
   p_updated: stamped.updatedAt,
 })
-if (up2.error) throw up2.error
+if (res.error) throw res.error
 
 const again = await sb.rpc('fetch_journey', { p_id: id })
 const finalRow = Array.isArray(again.data) ? again.data[0] : again.data
-const final = finalRow.payload
+assert(
+  finalRow.payload.progress['nc-1'].status === 'not_started',
+  'cloud must store not_started after reset',
+)
 
-const pass =
-  final.progress['nc-1']?.status === 'solved_independent' &&
-  final.progress['nc-2']?.status === 'attempting'
+// Step C: second device with older solved must not resurrect it
+const stalePhone = {
+  ...solved,
+  updatedAt: '2026-09-11T18:01:00.000Z',
+  progress: {
+    'nc-1': {
+      ...defaultProgress(),
+      status: 'solved_independent' as const,
+      confidence: 4 as const,
+      lastTouchedAt: '2026-09-11T12:00:00.000Z', // older than reset
+    },
+  },
+}
+const merged2 = mergeJourneys(stalePhone, finalRow.payload)
+assert(
+  merged2.progress['nc-1'].status === 'not_started',
+  'stale phone solved must not overwrite newer reset',
+)
 
-console.log('nc1', final.progress['nc-1']?.status)
-console.log('nc2', final.progress['nc-2']?.status)
-console.log('e2e', pass ? 'PASS' : 'FAIL')
-if (!pass) process.exit(1)
+console.log('e2e downgrade PASS')
