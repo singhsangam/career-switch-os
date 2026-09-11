@@ -200,4 +200,33 @@ export async function pushJourney(
   if (error) throw error
 }
 
+export async function pullMyJourney(): Promise<PersistedJourney | null> {
+  const sb = getSupabase()
+  if (!sb) return null
+
+  const { data, error } = await sb.rpc('fetch_my_journey')
+  if (error) throw error
+  if (!data) return null
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row?.payload) return null
+  return migratePersisted({
+    ...(row.payload as object),
+    schemaVersion: row.schema_version ?? DATA_SCHEMA_VERSION,
+    updatedAt: row.updated_at,
+  })
+}
+
+export async function pushMyJourney(journey: PersistedJourney): Promise<void> {
+  const sb = getSupabase()
+  if (!sb) return
+
+  const { error } = await sb.rpc('upsert_my_journey', {
+    p_schema: journey.schemaVersion,
+    p_payload: journey,
+    p_updated: journey.updatedAt,
+  })
+  if (error) throw error
+}
+
 export { isSyncConfigured }

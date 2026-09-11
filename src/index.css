@@ -207,8 +207,26 @@ textarea {
   font-size: 0.85rem;
 }
 
-.tiny {
-  font-size: 0.75rem;
+.auth-signed-in {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.auth-signed-in p {
+  margin: 0 0 0.55rem;
+  color: var(--mist);
+  font-size: 0.9rem;
+}
+
+.code-toggle {
+  margin: 0.85rem 0 0.45rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 @keyframes pulse {

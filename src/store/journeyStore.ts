@@ -20,9 +20,18 @@ import {
   isSyncConfigured,
   mergeJourneys,
   pullJourney,
+  pullMyJourney,
   pushJourney,
+  pushMyJourney,
   type SyncStatus,
 } from '../lib/sync'
+import {
+  getSession,
+  onAuthChange,
+  signInWithEmail,
+  signInWithGoogle,
+  signOut,
+} from '../lib/supabase'
 import type {
   DayMode,
   JourneyState,
@@ -37,6 +46,8 @@ interface Store extends JourneyState {
   updatedAt: string
   moduleStatuses: Record<string, ModuleMeta['status']>
   syncId: string | null
+  userId: string | null
+  userEmail: string | null
   syncStatus: SyncStatus
   syncError: string | null
   lastSyncedAt: string | null
@@ -58,6 +69,10 @@ interface Store extends JourneyState {
   applyPersisted: (p: PersistedJourney) => void
   getPersistedSnapshot: () => PersistedJourney
   touchUpdatedAt: () => void
+  initAuth: () => () => void
+  signInEmail: (email: string) => Promise<void>
+  signInGoogle: () => Promise<void>
+  signOutUser: () => Promise<void>
 }
 
 function todayKey() {
@@ -80,8 +95,7 @@ let pushTimer: ReturnType<typeof setTimeout> | null = null
 
 function scheduleCloudPush(get: () => Store) {
   if (!isSyncConfigured()) return
-  const id = get().syncId
-  if (!id) return
+  if (!get().userId && !get().syncId) return
   if (pushTimer) clearTimeout(pushTimer)
   pushTimer = setTimeout(() => {
     void get().syncNow()
@@ -102,6 +116,8 @@ export const useJourneyStore = create<Store>()(
       moduleStatuses: defaultModuleStatuses(),
       modules: catalogModules(),
       syncId: readStoredSyncId(),
+      userId: null,
+      userEmail: null,
       syncStatus: isSyncConfigured() ? 'idle' : 'unconfigured',
       syncError: null,
       lastSyncedAt: null,
@@ -341,16 +357,21 @@ export const useJourneyStore = create<Store>()(
           set({ syncStatus: 'unconfigured' })
           return
         }
-        const id = get().ensureSyncId()
         set({ syncStatus: 'syncing', syncError: null })
         try {
-          const remote = await pullJourney(id)
           const local = get().getPersistedSnapshot()
-          const merged = mergeJourneys(local, remote)
-          get().applyPersisted(merged)
-          // Only push if we have something worth storing / changed vs remote substance
-          const snapshot = get().getPersistedSnapshot()
-          await pushJourney(id, snapshot)
+          if (get().userId) {
+            const remote = await pullMyJourney()
+            const merged = mergeJourneys(local, remote)
+            get().applyPersisted(merged)
+            await pushMyJourney(get().getPersistedSnapshot())
+          } else {
+            const id = get().ensureSyncId()
+            const remote = await pullJourney(id)
+            const merged = mergeJourneys(local, remote)
+            get().applyPersisted(merged)
+            await pushJourney(id, get().getPersistedSnapshot())
+          }
           set({
             syncStatus: 'synced',
             lastSyncedAt: new Date().toISOString(),
@@ -364,6 +385,43 @@ export const useJourneyStore = create<Store>()(
             syncError: e instanceof Error ? e.message : 'Sync failed',
           })
         }
+      },
+
+      initAuth: () => {
+        if (!isSyncConfigured()) return () => undefined
+
+        void getSession().then((session) => {
+          set({
+            userId: session?.user?.id ?? null,
+            userEmail: session?.user?.email ?? null,
+          })
+          if (session?.user) void get().syncNow()
+        })
+
+        return onAuthChange((_session, user) => {
+          set({
+            userId: user?.id ?? null,
+            userEmail: user?.email ?? null,
+          })
+          if (user) void get().syncNow()
+        })
+      },
+
+      signInEmail: async (email) => {
+        await signInWithEmail(email)
+      },
+
+      signInGoogle: async () => {
+        await signInWithGoogle()
+      },
+
+      signOutUser: async () => {
+        await signOut()
+        set({
+          userId: null,
+          userEmail: null,
+          syncStatus: isSyncConfigured() ? 'idle' : 'unconfigured',
+        })
       },
     }),
     {

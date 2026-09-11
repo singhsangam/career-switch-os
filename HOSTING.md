@@ -1,59 +1,43 @@
-# Hosting + cross-device sync
+# Hosting + account sync
 
 **Live site:** https://singhsangam.github.io/career-switch-os/
 
-Progress is stored separately from app code. Redeploys and refreshes after feature updates keep your solved status, notes, and confidence.
+## Important
 
-## How updates stay safe
+Having the same Google account in Chrome on phone and laptop does **not** sync this app. You must **sign in inside the app** with the same email on both devices.
 
-| Layer | What it is | On refresh / redeploy |
-|---|---|---|
-| App / UI / modules / problem catalog | Code in git | Updates |
-| Your journey status | Browser cache + cloud payload | Preserved |
-| Schema version | `DATA_SCHEMA_VERSION` | Migrates; never wipes progress |
+## One-time Supabase setup
 
-## Enable phone ↔ laptop sync (one-time, ~5–10 min)
+### 1. Run SQL
 
-### 1. Free Supabase project
+SQL Editor → paste `supabase/schema.sql` → Run.
 
-1. Open https://supabase.com → **New project**
-2. **SQL Editor** → New query → paste all of `supabase/schema.sql` → **Run**
-3. **Project Settings → API** → copy:
-   - Project URL
-   - `anon` `public` key
+### 2. Auth URL settings
 
-### 2. Add secrets to GitHub (so the hosted site can sync)
+Authentication → URL Configuration:
 
-In PowerShell from this folder:
+- **Site URL:** `https://singhsangam.github.io/career-switch-os/`
+- **Redirect URLs** (add both):
+  - `https://singhsangam.github.io/career-switch-os/**`
+  - `http://localhost:5173/**`
 
-```powershell
-gh secret set VITE_SUPABASE_URL
-gh secret set VITE_SUPABASE_ANON_KEY
-```
+### 3. Email login
 
-Paste each value when prompted, then:
+Authentication → Providers → **Email** → enabled (default).
 
-```powershell
-gh workflow run Deploy
-```
+### 4. Google login (optional but nice)
 
-### 3. Local `.env` (optional, for `npm run dev`)
+Authentication → Providers → **Google** → enable and paste Google Cloud OAuth client ID/secret.
 
-```powershell
-copy .env.example .env
-```
+### 5. GitHub secrets (already set if you did this before)
 
-Fill the same two values, restart the dev server.
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
 
-### 4. Link devices
+## How to use
 
-1. Open the live site on your laptop
-2. Tap the sync pill (top right) → **Copy** `RTD-****`
-3. Open the same URL on phone Chrome
-4. Paste → **Link**
+1. Open the site on laptop → sync pill → enter your email → **Email link**
+2. Open the email on that laptop → click the link → signed in
+3. Repeat on phone with the **same email**
+4. Progress syncs automatically
 
-Same code = same journey, any country / network. Treat the code like a password.
-
-## Repo
-
-https://github.com/singhsangam/career-switch-os
+Treat email login as the primary sync method. Sync codes remain under Advanced.

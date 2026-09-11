@@ -1,55 +1,6 @@
--- Full setup: anonymous sync codes + email/Google account journeys.
--- Run this entire file once in Supabase SQL Editor.
+-- Auth-backed journeys (run in SQL Editor after the original schema).
+-- Same email login on phone + laptop = same progress automatically.
 
--- ===== Legacy sync-code table (optional fallback) =====
-create table if not exists public.journeys (
-  id text primary key,
-  schema_version int not null default 1,
-  payload jsonb not null,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.journeys enable row level security;
-revoke all on public.journeys from anon, authenticated;
-
-create or replace function public.fetch_journey(p_id text)
-returns table (schema_version int, payload jsonb, updated_at timestamptz)
-language sql
-security definer
-set search_path = public
-as $$
-  select j.schema_version, j.payload, j.updated_at
-  from public.journeys j
-  where j.id = p_id;
-$$;
-
-create or replace function public.upsert_journey(
-  p_id text,
-  p_schema int,
-  p_payload jsonb,
-  p_updated timestamptz
-)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.journeys (id, schema_version, payload, updated_at)
-  values (p_id, p_schema, p_payload, coalesce(p_updated, now()))
-  on conflict (id) do update
-  set
-    schema_version = excluded.schema_version,
-    payload = excluded.payload,
-    updated_at = excluded.updated_at
-  where excluded.updated_at >= journeys.updated_at;
-end;
-$$;
-
-grant execute on function public.fetch_journey(text) to anon, authenticated;
-grant execute on function public.upsert_journey(text, int, jsonb, timestamptz) to anon, authenticated;
-
--- ===== Auth-backed journeys (recommended) =====
 create table if not exists public.user_journeys (
   user_id uuid primary key references auth.users (id) on delete cascade,
   schema_version int not null default 1,
@@ -58,11 +9,8 @@ create table if not exists public.user_journeys (
 );
 
 alter table public.user_journeys enable row level security;
-revoke all on public.user_journeys from anon, authenticated;
 
-drop policy if exists "user_journeys_select_own" on public.user_journeys;
-drop policy if exists "user_journeys_insert_own" on public.user_journeys;
-drop policy if exists "user_journeys_update_own" on public.user_journeys;
+revoke all on public.user_journeys from anon, authenticated;
 
 create policy "user_journeys_select_own"
   on public.user_journeys for select
@@ -82,6 +30,7 @@ create policy "user_journeys_update_own"
 
 grant select, insert, update on public.user_journeys to authenticated;
 
+-- Convenience RPCs (also enforce auth.uid())
 create or replace function public.fetch_my_journey()
 returns table (schema_version int, payload jsonb, updated_at timestamptz)
 language sql
