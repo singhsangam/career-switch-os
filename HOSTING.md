@@ -1,43 +1,43 @@
-# Hosting + account sync
+# Account sync setup
 
-**Live site:** https://singhsangam.github.io/career-switch-os/
+**Live:** https://singhsangam.github.io/career-switch-os/
 
-## Important
+## Why Chrome email alone is not enough
 
-Having the same Google account in Chrome on phone and laptop does **not** sync this app. You must **sign in inside the app** with the same email on both devices.
+Chrome sync ≠ this app. You must create/sign in **inside Road to December** with the same email on both devices.
 
-## One-time Supabase setup
+## Recommended login (most reliable)
 
-### 1. Run SQL
+**Create account** with email + password on laptop, then **Sign in** with the same on phone.
 
-SQL Editor → paste `supabase/schema.sql` → Run.
+## One-time Supabase checklist
 
-### 2. Auth URL settings
+### 1. SQL (required)
+
+SQL Editor → paste `supabase/schema.sql` → **Run**.
+
+### 2. Turn OFF email confirmation (so password signup works instantly)
+
+Authentication → Providers → Email → **Confirm email = OFF**
+
+(Otherwise new accounts need a confirmation email before sign-in works.)
+
+### 3. Auth URLs
 
 Authentication → URL Configuration:
 
-- **Site URL:** `https://singhsangam.github.io/career-switch-os/`
-- **Redirect URLs** (add both):
+- Site URL: `https://singhsangam.github.io/career-switch-os/`
+- Redirect URLs:
   - `https://singhsangam.github.io/career-switch-os/**`
   - `http://localhost:5173/**`
 
-### 3. Email login
+### 4. Optional: Google provider
 
-Authentication → Providers → **Email** → enabled (default).
+Authentication → Providers → Google → enable with OAuth client ID/secret.
 
-### 4. Google login (optional but nice)
+## How to sync phone + laptop
 
-Authentication → Providers → **Google** → enable and paste Google Cloud OAuth client ID/secret.
-
-### 5. GitHub secrets (already set if you did this before)
-
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
-
-## How to use
-
-1. Open the site on laptop → sync pill → enter your email → **Email link**
-2. Open the email on that laptop → click the link → signed in
-3. Repeat on phone with the **same email**
-4. Progress syncs automatically
-
-Treat email login as the primary sync method. Sync codes remain under Advanced.
+1. Laptop: open site → **Create account** → email + password
+2. Phone: open same site → **Sign in** → same email + password
+3. Top pill should show **Synced**
+4. Change a problem status on one device → wait a few seconds → refresh the other

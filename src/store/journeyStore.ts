@@ -28,9 +28,12 @@ import {
 import {
   getSession,
   onAuthChange,
-  signInWithEmail,
+  sendEmailOtp,
   signInWithGoogle,
+  signInWithPassword,
   signOut,
+  signUpWithPassword,
+  verifyEmailOtp,
 } from '../lib/supabase'
 import type {
   DayMode,
@@ -70,7 +73,10 @@ interface Store extends JourneyState {
   getPersistedSnapshot: () => PersistedJourney
   touchUpdatedAt: () => void
   initAuth: () => () => void
-  signInEmail: (email: string) => Promise<void>
+  signInPassword: (email: string, password: string) => Promise<void>
+  signUpPassword: (email: string, password: string) => Promise<void>
+  sendOtp: (email: string) => Promise<void>
+  verifyOtp: (email: string, token: string) => Promise<void>
   signInGoogle: () => Promise<void>
   signOutUser: () => Promise<void>
 }
@@ -407,8 +413,41 @@ export const useJourneyStore = create<Store>()(
         })
       },
 
-      signInEmail: async (email) => {
-        await signInWithEmail(email)
+      signInPassword: async (email, password) => {
+        const user = await signInWithPassword(email, password)
+        set({
+          userId: user.id,
+          userEmail: user.email ?? email,
+          syncStatus: 'syncing',
+          syncError: null,
+        })
+        await get().syncNow()
+      },
+
+      signUpPassword: async (email, password) => {
+        const user = await signUpWithPassword(email, password)
+        set({
+          userId: user.id,
+          userEmail: user.email ?? email,
+          syncStatus: 'syncing',
+          syncError: null,
+        })
+        await get().syncNow()
+      },
+
+      sendOtp: async (email) => {
+        await sendEmailOtp(email)
+      },
+
+      verifyOtp: async (email, token) => {
+        const user = await verifyEmailOtp(email, token)
+        set({
+          userId: user.id,
+          userEmail: user.email ?? email,
+          syncStatus: 'syncing',
+          syncError: null,
+        })
+        await get().syncNow()
       },
 
       signInGoogle: async () => {

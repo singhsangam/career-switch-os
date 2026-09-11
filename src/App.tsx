@@ -14,8 +14,9 @@ import {
 } from './store/journeyStore'
 import type { DayMode, ProblemStatus } from './types'
 import { MILESTONE_DATE } from './types'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { SyncDock } from './components/SyncDock'
+import { AuthScreen } from './components/AuthScreen'
 
 type Tab = 'today' | 'journey' | 'week' | 'modules'
 
@@ -40,7 +41,10 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('today')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [rhTitle, setRhTitle] = useState('')
+  const [skipAuth, setSkipAuth] = useState(false)
 
+  const userId = useJourneyStore((s) => s.userId)
+  const initAuth = useJourneyStore((s) => s.initAuth)
   const dayMode = useJourneyStore((s) => s.dayMode)
   const setDayMode = useJourneyStore((s) => s.setDayMode)
   const progress = useJourneyStore((s) => s.progress)
@@ -96,9 +100,27 @@ export default function App() {
     ? schedule.find((s) => s.problemId === openProblem.id)
     : undefined
 
+  useEffect(() => {
+    const unsub = initAuth()
+    return unsub
+  }, [initAuth])
+
+  if (!userId && !skipAuth) {
+    return <AuthScreen onSkip={() => setSkipAuth(true)} />
+  }
+
   return (
     <div className="app-shell">
       <div className="atmosphere" aria-hidden />
+      {!userId && skipAuth && (
+        <button
+          type="button"
+          className="connect-banner"
+          onClick={() => setSkipAuth(false)}
+        >
+          Not syncing yet — tap to create / sign in with email so phone and laptop share progress
+        </button>
+      )}
       <header className="topbar">
         <div className="brand-block">
           <p className="eyebrow">Career Switch OS · V1</p>
